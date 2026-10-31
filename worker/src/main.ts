@@ -10,7 +10,7 @@ type D1Statement = {
 type D1Database = {
   prepare: (sql: string) => D1Statement;
 };
-type R2Bucket = { get: (key: string) => Promise<any> };
+type R2Bucket = { get: (key: string) => Promise<any>; put: (key: string, value: ArrayBuffer, options?: any) => Promise<any>; delete: (key: string) => Promise<any> };
 
 type Env = {
   DB: D1Database;
