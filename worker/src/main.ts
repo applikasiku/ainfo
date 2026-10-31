@@ -393,11 +393,70 @@ async function maybeRewriteHtml(res: Response) {
   return new Response(body, { status: res.status, statusText: res.statusText, headers });
 }
 
+
+async function directPublish(req: Request, env: Env) {
+  const expected = String(env.AINFO_PUBLISH_TOKEN || '');
+  const auth = req.headers.get('authorization') || '';
+  if (!expected || !auth.startsWith('Bearer ') || !timingSafe(auth.slice(7), expected)) {
+    return json({ error: 'unauthorized', message: 'Publisher token tidak valid atau belum dikonfigurasi.' }, 401);
+  }
+  const ct = req.headers.get('content-type') || '';
+  if (!ct.toLowerCase().includes('multipart/form-data')) return json({ error: 'multipart_required' }, 415);
+  const form = await req.formData();
+  const title = String(form.get('title') || '').trim().slice(0, 180);
+  const slug = slugify(String(form.get('slug') || title));
+  const excerpt = String(form.get('excerpt') || '').trim().slice(0, 320);
+  const category = String(form.get('category') || 'Home & Garden').trim().slice(0, 80);
+  const seoTitle = String(form.get('seo_title') || title).trim().slice(0, 180);
+  const seoDescription = String(form.get('seo_description') || excerpt).trim().slice(0, 320);
+  const author = String(form.get('author_name') || 'AINFO Editorial Team').trim().slice(0, 100);
+  const rawContent = String(form.get('content') || '');
+  let paragraphs: string[] = [];
+  try {
+    const parsed = JSON.parse(rawContent);
+    paragraphs = Array.isArray(parsed) ? parsed.map((x:any) => String(x).trim()).filter(Boolean) : String(rawContent).split(/\\n\\s*\\n/).map(x=>x.trim()).filter(Boolean);
+  } catch { paragraphs = rawContent.split(/\\n\\s*\\n/).map(x=>x.trim()).filter(Boolean); }
+  if (!title || !excerpt || paragraphs.length < 3) return json({ error: 'invalid_article', message: 'Title, excerpt, dan minimal 3 paragraf wajib diisi.' }, 400);
+  if (await env.DB.prepare('SELECT id FROM articles WHERE slug=?').bind(slug).first()) return json({ error: 'slug_exists' }, 409);
+  const image = form.get('image');
+  if (!(image instanceof File) || !image.size || image.size > 8 * 1024 * 1024) return json({ error: 'invalid_image', message: 'Thumbnail wajib berupa file gambar maksimal 8 MB.' }, 400);
+  const mime = image.type.toLowerCase();
+  const ext = ({ 'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp' } as Record<string,string>)[mime];
+  if (!ext) return json({ error: 'unsupported_image', message: 'Format thumbnail harus JPG, PNG, atau WebP.' }, 415);
+  const key = `articles/${slug}-${Date.now()}.${ext}`;
+  const bytes = await image.arrayBuffer();
+  await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mime, cacheControl: 'public, max-age=31536000, immutable' }, customMetadata: { alt: title } });
+  const imageUrl = `${appDomain(env)}/media/${key}`;
+  const now = new Date().toISOString();
+  const minutes = Math.max(1, Math.ceil(paragraphs.join(' ').split(/\\s+/).length / 220));
+  const contentJson = JSON.stringify(paragraphs);
+  try {
+    await env.DB.prepare(`INSERT INTO articles(slug,title,excerpt,content_json,category,author_name,author_slug,image_url,image_caption,status,read_minutes,seo_title,seo_description,canonical_url,published_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,'published',?,?,?,?,?,?)`)
+      .bind(slug,title,excerpt,contentJson,category,author,slugify(author),imageUrl,title,minutes,seoTitle,seoDescription,`${appDomain(env)}/read/${slug}/`,now,now).run();
+    await env.DB.prepare('INSERT INTO media(r2_key,public_url,mime_type,size_bytes,alt_text) VALUES(?,?,?,?,?)')
+      .bind(key,imageUrl,mime,image.size,title).run();
+    const stateRow = await env.DB.prepare("SELECT value_json,version FROM app_state WHERE key='ainfo-admin-articles'").first<any>();
+    let items:any[] = [];
+    try { items = JSON.parse(stateRow?.value_json || '[]'); if (!Array.isArray(items)) items=[]; } catch {}
+    const item = { id: Date.now(), slug, title, cat: category, category, excerpt, content: paragraphs, author, authorName: author, authorSlug: slugify(author), image: imageUrl, imageUrl, imageCaption: title, status: 'published', publishedAt: now, createdAt: now, updatedAt: now, seoTitle, seoDescription, readMinutes: minutes, views: 0 };
+    items.unshift(item);
+    await env.DB.prepare(`INSERT INTO app_state(key,value_json,version,updated_at) VALUES('ainfo-admin-articles',?,?,CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,version=app_state.version+1,updated_at=CURRENT_TIMESTAMP`)
+      .bind(JSON.stringify(items), Number(stateRow?.version || 0) + 1).run();
+    return json({ ok: true, status: 'published', slug, url: `${appDomain(env)}/read/${slug}/`, image_url: imageUrl }, 201);
+  } catch (e) {
+    await env.MEDIA.delete(key).catch(()=>{});
+    console.error('AINFO direct publish failed', e);
+    return json({ error: 'publish_failed', message: 'Artikel gagal disimpan. Periksa skema database dan log Worker.' }, 500);
+  }
+}
+
 async function route(req: Request, env: Env, ctx?: any) {
   const url = new URL(req.url);
   const p = url.pathname;
 
-  if (p === '/api/health' && req.method === 'GET') return health(req, env, ctx);
+  if (p === '/api/health' && req.method === 'GET') return health(req, env, ctx);\n  if (p === '/api/publisher/v1/articles' && req.method === 'POST') return directPublish(req, env);
   if ((p === '/api/midtrans/checkout' || p === '/api/doku/checkout') && req.method === 'POST') return shopCheckout(req, env);
   if (p === '/api/gift/checkout' && req.method === 'POST') return giftCheckout(req, env);
   if (p === '/api/midtrans/webhook' && req.method === 'POST') return midtransWebhook(req, env);
