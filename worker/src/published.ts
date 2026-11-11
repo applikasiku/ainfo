@@ -1,3 +1,4 @@
+import { novemberArticles } from './november-ai-2026';
 // Published articles can be added from ChatGPT using the connected GitHub repository.
 // Each article must be reviewed for accuracy, original value, and image rights before publishing.
 // Keep this array as the single source of truth for newly published editorial articles.
@@ -14,4 +15,4 @@ export type PublishedArticle = {
   author?: string;
   updated?: string;
 };
-export const publishedArticles: PublishedArticle[] = [];
+export const publishedArticles: PublishedArticle[] = [...novemberArticles];
