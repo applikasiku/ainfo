@@ -25,4 +25,59 @@ const policy={
 function render(req){const u=new URL(req.url);let p=u.pathname;if(p==='/index.html')p='/';if(p==='/')return new Response(home(),{headers:htmlHeaders()});if(p==='/robots.txt')return plain('User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /api/\nSitemap: '+ORIGIN+'/sitemap.xml\n','text/plain');if(p==='/sitemap.xml'){const paths=['/','/about/','/editorial-policy/','/privacy/','/contact/',...categories.map(c=>'/category/'+slug(c)+'/'),...articles.map(a=>'/read/'+a.slug+'/')];return plain('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(s=>'<url><loc>'+ORIGIN+s+'</loc></url>').join('')+'</urlset>','application/xml');}if(p.startsWith('/thumbnail/')&&p.endsWith('.svg')){const a=articles.find(x=>p==='/thumbnail/'+x.slug+'.svg');if(!a)return new Response('Not found',{status:404});const words=a.title.split(' ');const lines=[];let line='';for(const w of words){if((line+' '+w).length>27&&line){lines.push(line);line=w;}else line+=(line?' ':'')+w;}if(line)lines.push(line);const title=lines.slice(0,4).map((v,i)=>'<text x="74" y="'+(290+i*80)+'" font-family="Arial,sans-serif" font-size="59" font-weight="800" fill="white">'+esc(v)+'</text>').join('');const svg='<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#091b42"/><stop offset="1" stop-color="#235be0"/></linearGradient></defs><rect width="1200" height="630" fill="url(#g)"/><circle cx="1060" cy="80" r="250" fill="#ffffff" opacity=".07"/><text x="74" y="95" font-family="Arial,sans-serif" font-size="43" font-weight="800" fill="#fff">AINFO</text><text x="74" y="151" font-family="Arial,sans-serif" font-size="23" letter-spacing="3" fill="#93c5fd">'+esc(a.cat.toUpperCase())+'</text>'+title+'</svg>';return plain(svg,'image/svg+xml');}if(p==='/favicon.svg'||p==='/logo.svg')return plain('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="13" fill="#2463eb"/><path d="M10 34 23 11h5l12 23h-8l-2-5H19l-2 5zm12-11h6l-3-7z" fill="#fff"/></svg>','image/svg+xml');const a=articles.find(a=>p==='/read/'+a.slug+'/');if(a){const body=`<article class="article"><a class="tag" href="/category/${slug(a.cat)}/">${esc(a.cat)}</a><h1>${esc(a.title)}</h1><p class="intro">${esc(a.desc)}</p><div class="meta">AINFO Editorial · Published ${a.date} · ${a.read}</div><img src="${esc(thumb(a))}" alt="${esc(a.imageAlt||a.title)}" width="1200" height="630" fetchpriority="high" style="width:100%;height:auto;border-radius:16px;margin-top:28px"><hr style="border:0;border-top:1px solid var(--line);margin:28px 0">${a.body}<p><a class="btn alt" href="/">${icon('arrow-left')} Back to AINFO</a></p></article>`;return new Response(layout(a.title,a.desc,body,p,'Article',`<meta property="article:published_time" content="${a.date}T00:00:00Z"><meta property="og:image" content="${esc(thumb(a).startsWith("http")?thumb(a):ORIGIN+thumb(a))}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${esc(thumb(a).startsWith("http")?thumb(a):ORIGIN+thumb(a))}">`),{headers:htmlHeaders()});}const c=categories.find(c=>p==='/category/'+slug(c)+'/');if(c){const filtered=articles.filter(a=>a.cat===c);return new Response(layout(c+' Guides','Explore AINFO articles and practical explainers about '+c+'.',`<section class="section"><div class="wrap"><div class="eyebrow">Topic</div><h1>${esc(c)}</h1><p class="lede">Practical articles, explainers and resources about ${esc(c.toLowerCase())}.</p>${filtered.length?'<div class="grid">'+filtered.map(card).join('')+'</div>':'<div class="empty">New articles are being prepared for this topic. Explore our current guides on the homepage.</div>'}</div></section>`,p),{headers:htmlHeaders()});}const k=p.replace(/^\/|\/$/g,'');if(policy[k]){const [title,desc]=policy[k];return new Response(layout(title,desc,`<article class="article"><h1>${esc(title)}</h1><p>${esc(desc)}</p></article>`,p),{headers:htmlHeaders()});}return new Response(layout('Page not found','This page is unavailable.',`<article class="article"><h1>Page not found</h1><p>That page is unavailable. Browse the latest AINFO guides instead.</p><a class="btn" href="/">Return home</a></article>`,p),{status:404,headers:{...htmlHeaders(),'x-robots-tag':'noindex'}});}
 function htmlHeaders(){return {'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=0, s-maxage=300','x-content-type-options':'nosniff','referrer-policy':'strict-origin-when-cross-origin'};}
 function plain(t,ct){return new Response(t,{headers:{'content-type':ct+'; charset=utf-8','cache-control':'public, max-age=3600'}});}
-export default {fetch(request){return render(request)}};
+
+type EditorialEnv = {
+  TECH_DB?: { prepare: (sql: string) => { bind: (...params: unknown[]) => { run: () => Promise<unknown>; first: () => Promise<Record<string, unknown> | null>; all: () => Promise<{results: Record<string, unknown>[]}> } } };
+  AINFO_PUBLISH_TOKEN?: string;
+};
+function safeText(value: unknown): string {return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function authorized(request: Request, env: EditorialEnv): boolean {
+ const expected=env.AINFO_PUBLISH_TOKEN||'';
+ const supplied=request.headers.get('authorization')||'';
+ const token=supplied.startsWith('Bearer ')?supplied.slice(7):'';
+ if(!expected||token.length!==expected.length)return false;
+ let difference=0;for(let i=0;i<expected.length;i++)difference|=expected.charCodeAt(i)^token.charCodeAt(i);
+ return difference===0;
+}
+async function editorialApi(request: Request, env: EditorialEnv): Promise<Response> {
+ const headers={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
+ const respond=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers});
+ if(request.method!=='POST')return respond({error:'Method not allowed'},405);
+ if(!authorized(request,env))return respond({error:'Unauthorized'},401);
+ if(!env.TECH_DB)return respond({error:'Editorial database unavailable'},503);
+ if(Number(request.headers.get('content-length')||0)>60000)return respond({error:'Payload too large'},413);
+ let data:Record<string,unknown>;
+ try {data=await request.json() as Record<string,unknown>;}catch{return respond({error:'Invalid JSON'},400);}
+ const title=String(data.title||'').trim(),slugValue=String(data.slug||'').trim().toLowerCase(),description=String(data.description||'').trim(),category=String(data.category||'').trim();
+ if(title.length<15||title.length>160||!(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).test(slugValue)||slugValue.length>120||description.length<60||description.length>300||!categories.includes(category))return respond({error:'Invalid title, slug, description or category'},400);
+ const sections=Array.isArray(data.sections)?data.sections:[];
+ if(sections.length<3||sections.length>24)return respond({error:'Provide 3 to 24 sections'},400);
+ const htmlParts:string[]=[];
+ for(const item of sections){if(!item||typeof item!=='object')return respond({error:'Invalid section'},400);const section=item as Record<string,unknown>;const heading=String(section.heading||'').trim(),paragraph=String(section.text||'').trim();if(heading.length>140||paragraph.length<50||paragraph.length>8000)return respond({error:'Invalid section length'},400);if(heading)htmlParts.push('<h2>'+safeText(heading)+'</h2>');htmlParts.push('<p>'+safeText(paragraph)+'</p>');}
+ const body=htmlParts.join(''),now=new Date().toISOString().slice(0,19).replace('T',' ');
+ const status=data.status==='draft'?'draft':'published';
+ try {
+  await env.TECH_DB.prepare('INSERT INTO tech_articles(slug,title,description,category,body_html,image_alt,author,status,published_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(slugValue,title,description,category,body,String(data.image_alt||title).slice(0,180),'AINFO Editorial',status,status==='published'?now:null).run();
+  return respond({ok:true,slug:slugValue,status,url:ORIGIN+'/read/'+slugValue+'/'},201);
+ }catch{return respond({error:'Could not save article; slug may already exist'},409);}
+}
+async function editorialRead(request: Request, env: EditorialEnv): Promise<Response|null> {
+ if(!env.TECH_DB)return null;
+ const u=new URL(request.url),match=u.pathname.match(/^\\/read\\/([a-z0-9-]+)\\/$/);
+ if(!match)return null;
+ let a:Record<string,unknown>|null;
+ try{a=await env.TECH_DB.prepare("SELECT slug,title,description,category,body_html,image_alt,published_at FROM tech_articles WHERE slug=? AND status='published' LIMIT 1").bind(match[1]).first();}catch{return null;}
+ if(!a)return null;
+ const path=u.pathname,title=String(a.title),desc=String(a.description),cat=String(a.category);
+ const thumbnail='/thumbnail/'+String(a.slug)+'.svg';
+ const body='<article class="article"><a class="tag" href="/category/'+slug(cat)+'/">'+safeText(cat)+'</a><h1>'+safeText(title)+'</h1><p class="intro">'+safeText(desc)+'</p><div class="meta">AINFO Editorial · Published '+safeText(String(a.published_at||'').slice(0,10))+'</div><img src="'+thumbnail+'" alt="'+safeText(a.image_alt||title)+'" width="1200" height="630" style="width:100%;height:auto;border-radius:16px;margin-top:28px"><hr style="border:0;border-top:1px solid var(--line);margin:28px 0">'+String(a.body_html)+'</article>';
+ return new Response(layout(title,desc,body,path,'Article','<meta property="og:image" content="'+ORIGIN+thumbnail+'"><meta name="twitter:card" content="summary_large_image">'),{headers:htmlHeaders()});
+}
+
+export default {async fetch(request: Request, env: EditorialEnv) {
+ const path=new URL(request.url).pathname;
+ if(path==='/api/editorial/articles')return editorialApi(request,env);
+ if(path.startsWith('/read/')){const stored=await editorialRead(request,env);if(stored)return stored;}
+ return render(request);
+}};
+
