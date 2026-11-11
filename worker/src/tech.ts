@@ -88,11 +88,11 @@ async function editorialApi(request: Request, env: EditorialEnv): Promise<Respon
  for(const item of sections){if(!item||typeof item!=='object')return respond({error:'Invalid section'},400);const section=item as Record<string,unknown>;const heading=String(section.heading||'').trim(),paragraph=String(section.text||'').trim();if(heading.length>140||paragraph.length<50||paragraph.length>8000)return respond({error:'Invalid section length'},400);if(heading)htmlParts.push('<h2>'+safeText(heading)+'</h2>');htmlParts.push('<p>'+safeText(paragraph)+'</p>');}
  const body=htmlParts.join(''),now=new Date().toISOString().slice(0,19).replace('T',' ');
  const status=data.status==='draft'?'draft':'published';
- const words=sections.reduce((total,item)=>total+String((item as Record<string,unknown>).text||'').trim().split(/\\s+/).filter(Boolean).length,0);
+ const words=sections.reduce((total,item)=>total+String((item as Record<string,unknown>).text||'').trim().split(/\s+/).filter(Boolean).length,0);
  const headings=sections.map(item=>String((item as Record<string,unknown>).heading||'').trim()).filter(Boolean);
  const uniqueHeadings=new Set(headings.map(h=>h.toLowerCase()));
  if(status==='published'&&(words<700||headings.length<4||uniqueHeadings.size!==headings.length))return respond({error:'Editorial quality gate: published articles need at least 700 words, four distinct section headings, and no repeated headings.',word_count:words},422);
- if(status==='published'&&(!Array.isArray(data.sources)||data.sources.length<2||data.sources.length>12||!data.sources.every((v:unknown)=>typeof v==='string'&&/^https:\\/\\//.test(v)&&v.length<500)))return respond({error:'Provide 2 to 12 verifiable HTTPS source URLs for editorial review before publishing.'},422);
+ if(status==='published'&&(!Array.isArray(data.sources)||data.sources.length<2||data.sources.length>12||!data.sources.every((v:unknown)=>typeof v==='string'&&/^https:\/\//.test(v)&&v.length<500)))return respond({error:'Provide 2 to 12 verifiable HTTPS source URLs for editorial review before publishing.'},422);
  if(status==='published'&&data.fact_checked!==true)return respond({error:'A human editor must confirm source and factual review by setting fact_checked=true before publishing.'},422);
  if(status==='published'){htmlParts.push('<h2>Sources and further reading</h2><ul>'+((data.sources as string[]).map(link=>'<li><a href="'+safeText(link)+'" rel="noopener noreferrer" target="_blank">'+safeText(new URL(link).hostname)+'</a></li>').join(''))+'</ul>');}
  try {
