@@ -11,5 +11,19 @@
   },
   "vars": {
     "DOMAIN": "https://www.ainfo.web.id"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "TECH_DB",
+      "database_name": "ainfo-tech-cms",
+      "database_id": "40413078-0c21-4f09-91aa-001ecb572ded",
+      "migrations_dir": "tech-migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "TECH_MEDIA",
+      "bucket_name": "ainfo-media-prod"
+    }
+  ]
 }
