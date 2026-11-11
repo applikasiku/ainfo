@@ -63,7 +63,7 @@ async function editorialApi(request: Request, env: EditorialEnv): Promise<Respon
 }
 async function editorialRead(request: Request, env: EditorialEnv): Promise<Response|null> {
  if(!env.TECH_DB)return null;
- const u=new URL(request.url),match=u.pathname.match(/^\\/read\\/([a-z0-9-]+)\\/$/);
+ const u=new URL(request.url),match=u.pathname.match(new RegExp('^/read/([a-z0-9-]+)/$'));
  if(!match)return null;
  let a:Record<string,unknown>|null;
  try{a=await env.TECH_DB.prepare("SELECT slug,title,description,category,body_html,image_alt,published_at FROM tech_articles WHERE slug=? AND status='published' LIMIT 1").bind(match[1]).first();}catch{return null;}
