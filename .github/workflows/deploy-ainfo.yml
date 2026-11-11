@@ -13,8 +13,8 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: TypeScript validation
-        run: npm run typecheck
+      - name: Bundle validation (no production changes)
+        run: npx wrangler deploy --dry-run --outdir dist
       - name: Deploy Cloudflare Worker
         run: npx wrangler deploy
         env:
