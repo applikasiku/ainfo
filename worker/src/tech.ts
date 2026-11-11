@@ -102,13 +102,17 @@ async function editorialRead(request: Request, env: EditorialEnv): Promise<Respo
  if(!a)return null;
  const path=u.pathname,title=String(a.title),desc=String(a.description),cat=String(a.category);
  const thumbnail='/thumbnail/'+String(a.slug)+'.svg';
- const body='<article class="article"><a class="tag" href="/category/'+slug(cat)+'/">'+safeText(cat)+'</a><h1>'+safeText(title)+'</h1><p class="intro">'+safeText(desc)+'</p><div class="meta">AINFO Editorial · Published '+safeText(String(a.published_at||'').slice(0,10))+'</div><img src="'+thumbnail+'" alt="'+safeText(a.image_alt||title)+'" width="1200" height="630" style="width:100%;height:auto;border-radius:16px;margin-top:28px"><hr style="border:0;border-top:1px solid var(--line);margin:28px 0">'+String(a.body_html)+'</article>';
+ const articleDate=safeText(String(a.published_at||'').slice(0,10));
+ const articleContext={slug:String(a.slug),cat,title,desc,date:articleDate,read:'5 min read',body:String(a.body_html),imageAlt:String(a.image_alt||title)};
+ const body='<article class="article">'+breadcrumb([{label:cat,url:'/category/'+slug(cat)+'/'},{label:title}])+'<a class="tag" href="/category/'+slug(cat)+'/">'+safeText(cat)+'</a><h1>'+safeText(title)+'</h1><p class="intro">'+safeText(desc)+'</p><div class="meta">Published '+articleDate+'</div>'+authorBox('Sheila Marginov')+articleActions(path,title)+'<img src="'+thumbnail+'" alt="'+safeText(a.image_alt||title)+'" width="1200" height="630" fetchpriority="high" style="width:100%;height:auto;border-radius:16px;margin-top:16px"><hr style="border:0;border-top:1px solid var(--line);margin:28px 0">'+String(a.body_html)+creditBox+recommendations(articleContext)+commentSection+'</article>';
  return new Response(layout(title,desc,body,path,'Article','<meta property="og:image" content="'+ORIGIN+thumbnail+'"><meta name="twitter:card" content="summary_large_image">'),{headers:htmlHeaders()});
 }
 
 export default {async fetch(request: Request, env: EditorialEnv) {
  const path=new URL(request.url).pathname;
  if(path==='/api/editorial/articles')return editorialApi(request,env);
+ if(path.startsWith('/thumbnail/')&&path.endsWith('.svg')&&env.TECH_DB){const match=path.match(/^\/thumbnail\/([a-z0-9-]+)\.svg$/);if(match){try{const row=await env.TECH_DB.prepare("SELECT title,category FROM tech_articles WHERE slug=? AND status='published' LIMIT 1").bind(match[1]).first();if(row){const title=safeText(row.title),cat=safeText(row.category);const words=title.split(' '),lines=[];let line='';for(const w of words){if((line+' '+w).length>30&&line){lines.push(line);line=w}else line+=(line?' ':'')+w}if(line)lines.push(line);const labels=lines.slice(0,4).map((v,i)=>'<text x="78" y="'+(280+i*72)+'" font-family="Arial,sans-serif" font-size="52" font-weight="800" fill="white">'+v+'</text>').join('');const svg='<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><defs><linearGradient id="g"><stop stop-color="#073b3a"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs><rect width="1200" height="630" rx="24" fill="url(#g)"/><circle cx="1080" cy="100" r="250" fill="#5eead4" opacity=".12"/><text x="78" y="98" font-family="Arial,sans-serif" font-size="42" font-weight="800" fill="#fff">AINFO</text><text x="78" y="152" font-family="Arial,sans-serif" font-size="22" letter-spacing="3" fill="#99f6e4">'+cat.toUpperCase()+'</text>'+labels+'</svg>';return new Response(svg,{headers:{'content-type':'image/svg+xml; charset=utf-8','cache-control':'public, max-age=3600'}})}}catch{}}}
+ 
  if(path.startsWith('/read/')){const stored=await editorialRead(request,env);if(stored)return stored;}
  return render(request);
 }};
