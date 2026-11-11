@@ -1,49 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ainfo",
-  "main": "worker/src/main.ts",
+  "main": "worker/src/tech.ts",
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "html_handling": "auto-trailing-slash",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": [
-      "/",
-      "/index.html",
-      "/api/*",
-      "/media/*",
-      "/admin",
-      "/admin/*",
-      "/read/*",
-      "/sitemap.xml",
-      "/news-sitemap.xml",
-      "/rss.xml",
-      "/feed.xml"
-    ]
+    "run_worker_first": true
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "ainfo-db",
-      "database_id": "105007d1-0a57-4957-9f32-3c2f5d094d1a",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "MEDIA",
-      "bucket_name": "ainfo-media-prod"
-    }
-  ],
   "vars": {
-    "DOMAIN": "https://www.ainfo.web.id",
-    "JOOBLE_BASE_URL": "https://id.jooble.org",
-    "MIDTRANS_ENV": "sandbox",
-    "BACKUP_PREFIX": "backups"
-  },
-  "triggers": {
-    "crons": ["*/5 * * * *", "0 2 * * *"]
+    "DOMAIN": "https://www.ainfo.web.id"
   }
 }
