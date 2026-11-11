@@ -107,14 +107,16 @@ async function editorialRead(request: Request, env: EditorialEnv): Promise<Respo
  const u=new URL(request.url),match=u.pathname.match(new RegExp('^/read/([a-z0-9-]+)/$'));
  if(!match)return null;
  let a:Record<string,unknown>|null;
- try{a=await env.TECH_DB.prepare("SELECT slug,title,description,category,body_html,image_alt,published_at FROM tech_articles WHERE slug=? AND status='published' LIMIT 1").bind(match[1]).first();}catch{return null;}
+ try{a=await env.TECH_DB.prepare("SELECT slug,title,description,category,body_html,image_alt,image_key,published_at FROM tech_articles WHERE slug=? AND status='published' LIMIT 1").bind(match[1]).first();}catch{return null;}
  if(!a)return null;
  const path=u.pathname,title=String(a.title),desc=String(a.description),cat=String(a.category);
- const thumbnail='/thumbnail/'+String(a.slug)+'.svg';
+ const stockUrl=String(a.image_key||'');
+ const thumbnail=/^https:\/\/images\.unsplash\.com\/photo-[a-zA-Z0-9-]+(?:\?[a-zA-Z0-9=&%-]+)?$/.test(stockUrl)?stockUrl:'/thumbnail/'+String(a.slug)+'.svg';
+ const thumbnailAbsolute=thumbnail.startsWith('https://')?thumbnail:ORIGIN+thumbnail;
  const articleDate=safeText(String(a.published_at||'').slice(0,10));
  const articleContext={slug:String(a.slug),cat,title,desc,date:articleDate,read:'5 min read',body:String(a.body_html),imageAlt:String(a.image_alt||title)};
  const body='<article class="article">'+breadcrumb([{label:cat,url:'/category/'+slug(cat)+'/'},{label:title}])+'<a class="tag" href="/category/'+slug(cat)+'/">'+safeText(cat)+'</a><h1>'+safeText(title)+'</h1><p class="intro">'+safeText(desc)+'</p><div class="meta">Published '+articleDate+'</div>'+authorBox('Sheila Marginov')+articleActions(path,title)+'<img src="'+thumbnail+'" alt="'+safeText(a.image_alt||title)+'" width="1200" height="630" fetchpriority="high" style="width:100%;height:auto;border-radius:16px;margin-top:16px"><hr style="border:0;border-top:1px solid var(--line);margin:28px 0">'+String(a.body_html)+creditBox+recommendations(articleContext)+commentSection+'</article>';
- const articleSchema=JSON.stringify({'@context':'https://schema.org','@type':'NewsArticle',headline:title,description:desc,mainEntityOfPage:ORIGIN+path,datePublished:String(a.published_at||''),dateModified:String(a.published_at||''),image:[ORIGIN+thumbnail],author:{'@type':'Person',name:'Sheila Marginov'},publisher:{'@type':'Organization',name:'AINFO',url:ORIGIN,logo:{'@type':'ImageObject',url:ORIGIN+'/logo.svg'}},articleSection:cat,inLanguage:'en'}).replace(/</g,'\\u003c');const seoExtra='<meta property="og:image" content="'+ORIGIN+thumbnail+'"><meta property="og:image:alt" content="'+safeText(a.image_alt||title)+'"><meta property="article:published_time" content="'+safeText(a.published_at||'')+'"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">'+articleSchema+'</script>';return new Response(layout(title,desc,body,path,'Article',seoExtra),{headers:htmlHeaders()});
+ const articleSchema=JSON.stringify({'@context':'https://schema.org','@type':'NewsArticle',headline:title,description:desc,mainEntityOfPage:ORIGIN+path,datePublished:String(a.published_at||''),dateModified:String(a.published_at||''),image:[thumbnailAbsolute],author:{'@type':'Person',name:'Sheila Marginov'},publisher:{'@type':'Organization',name:'AINFO',url:ORIGIN,logo:{'@type':'ImageObject',url:ORIGIN+'/logo.svg'}},articleSection:cat,inLanguage:'en'}).replace(/</g,'\\u003c');const seoExtra='<meta property="og:image" content="'+thumbnailAbsolute+'"><meta property="og:image:alt" content="'+safeText(a.image_alt||title)+'"><meta property="article:published_time" content="'+safeText(a.published_at||'')+'"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">'+articleSchema+'</script>';return new Response(layout(title,desc,body,path,'Article',seoExtra),{headers:htmlHeaders()});
 }
 
 export default {async fetch(request: Request, env: EditorialEnv) {
