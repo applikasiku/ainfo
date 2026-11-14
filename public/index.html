@@ -119,7 +119,14 @@
     @media(max-width:760px){.auth-shell{grid-template-columns:1fr}.auth-brand{min-height:auto;padding:22px}.auth-brand img{width:82px;height:82px}.auth-brand h1{font-size:23px;margin:12px 0 6px}.auth-benefits{grid-template-columns:repeat(2,1fr);margin-top:14px}.auth-card{padding:22px 16px}.auth-card h2{font-size:22px}.anchor-ad-root{bottom:calc(70px + env(safe-area-inset-bottom))}.header-actions .account-pill span{display:none}.header-actions .account-pill{width:38px;padding:0}.gift-methods{grid-template-columns:1fr}}
 
 
-/* V13 category nav + running breaking ticker */
+/* AINFO latest-article brief ticker */
+    .brief-ticker{background:#0b4f4a;color:#fff;border-radius:0;margin:0;min-height:58px}
+    .brief-ticker>strong{background:#083d39;color:#fff;padding:15px 18px;font-size:clamp(13px,1.5vw,17px);letter-spacing:1.2px}
+    .brief-ticker .breaking-track{gap:38px;animation-duration:34s}
+    .brief-ticker .breaking-track a{font-size:clamp(13px,1.4vw,17px);font-weight:650}
+    .brief-ticker .breaking-track a:hover{text-decoration:underline}
+    @media(max-width:760px){.brief-ticker{min-height:52px}.brief-ticker>strong{padding:13px 12px;font-size:12px}.brief-ticker .breaking-track{gap:24px}.brief-ticker .breaking-track a{font-size:12px}}
+    /* V13 category nav + running breaking ticker */
 .desktop-nav{display:block;background:#fff;position:relative;z-index:72}
 .nav-row a{display:inline-flex;align-items:center;gap:5px;height:38px;padding:0 2px;border-bottom:2px solid transparent}
 .nav-row a.active{border-bottom-color:var(--blue)}
@@ -314,10 +321,12 @@ function categoryPage(name){
   return `<div class="page"><div class="container"><section class="category-hero"><span class="badge">KATEGORI</span><h1>${escapeHtml(decoded||'Berita')}</h1><p>Berita terbaru kategori ${escapeHtml(decoded||'pilihan')} dari AINFO.</p></section><div class="section-head"><h2>${use.length} Artikel</h2><a href="#/home">Kembali ke Beranda</a></div><div class="news-grid">${use.map(newsCard).join('')}</div>${adSlot('multiplex')}</div></div>`;
 }
 function breakingTicker(){
-  const items=(state.settings.breakingItems||[]).filter(Boolean);
-  if(!items.length)return'';
-  const row=items.map(x=>`<a href="#/home"><i class="fa-solid fa-circle"></i>${escapeHtml(x)}</a>`).join('');
-  return `<div class="breaking"><strong><i class="fa-solid fa-bolt"></i> BREAKING</strong><div class="breaking-viewport"><div class="breaking-track">${row}${row}</div></div><time>${new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} WIB</time></div>`;
+  const latest=(Array.isArray(articles)?articles:[])
+    .filter(a=>a&&a.title&&a.status!=='draft')
+    .slice(0,10);
+  if(!latest.length)return'';
+  const row=latest.map(a=>`<a href="#/article/${encodeURIComponent(a.id)}" onclick="event.stopPropagation()"><i class="fa-solid fa-circle"></i>${escapeHtml(a.title)}</a>`).join('');
+  return `<div class="breaking brief-ticker" aria-label="Artikel terbaru AINFO"><strong><i class="fa-solid fa-bolt"></i> THE BRIEF</strong><div class="breaking-viewport"><div class="breaking-track">${row}${row}</div></div></div>`;
 }
 function home(){const feed=articles.slice(1,9).map((a,i)=>`${newsCard(a)}${i===3?adSlot('nativeFeed','ad-native-grid'):''}`).join('');const recs=articles.slice(2,7);const rated=articles.slice(0,7);const jobPreview=activeJobs().slice(0,5);return `<div class="page"><div class="container">${adSlot('topBillboard')}${state.settings.showBreaking?breakingTicker():''}<div class="home-grid"><section><div class="lead-grid">${heroArticle(articles[0])}<div class="mini-stack">${articles.slice(1,5).map(miniArticle).join('')}</div></div>${adSlot('homeLeaderboard')}<div class="section-head"><div><h2>Berita Terkini</h2><p class="home-subtitle">Kabar terbaru dari berbagai kategori pilihan redaksi AINFO.</p></div><a href="#/home">Lihat Semua <i class="bi bi-arrow-right"></i></a></div><div class="chips">${['Semua','Nasional','Ekonomi','Teknologi','Olahraga','Lifestyle'].map((x,i)=>`<button class="chip ${i===0?'active':''}" onclick="${x==='Semua'?"go('home')":`location.hash='${categoryHash(x)}'`}">${x}</button>`).join('')}</div><div class="news-grid">${feed}</div></section><aside class="popular-side"><div class="panel"><h3>Terpopuler</h3>${articles.slice(0,5).map((a,i)=>`<div class="popular-item"><span class="num">${i+1}</span><div><b>${a.title}</b><div class="meta">${a.views} dibaca</div></div></div>`).join('')}</div><div class="panel" style="margin-top:12px"><h3>Pilihan Editor</h3>${articles.slice(2,6).map(a=>`<div class="mini-news" style="border:0;padding:7px 0"><img loading="lazy" src="${a.image}"><div><span class="cat">${a.cat}</span><b>${a.title}</b></div></div>`).join('')}</div></aside></div>
 <div class="home-rich">
